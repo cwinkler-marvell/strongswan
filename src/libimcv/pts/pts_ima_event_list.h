@@ -76,7 +76,7 @@ struct pts_ima_event_list_t {
  * Create a PTS IMA runtime file measurement object
  *
  * @param file				Pathname pointing to the IMA runtime measurements
- * @param algo				PCR hash measurement algorithm to be used
+ * @param pcr_algo			PCR hash measurement algorithm to be used
  */
 pts_ima_event_list_t* pts_ima_event_list_create(char *file,
 												pts_meas_algorithms_t pcr_algo);
