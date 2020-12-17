@@ -31,6 +31,9 @@ typedef struct event_entry_t event_entry_t;
 #define IMA_NG_TYPE_LEN				6
 #define IMA_TYPE_LEN_MAX			10
 #define IMA_ALGO_DIGEST_LEN_MAX		IMA_ALGO_LEN_MAX + HASH_SIZE_SHA512
+#define IMA_FILENAME_LEN_MAX		255
+
+
 
 /**
  * Private data of a pts_ima_event_list_t object.
@@ -61,7 +64,7 @@ struct private_pts_ima_event_list_t {
 struct event_entry_t {
 
 	/**
-	 * SHA1 measurement hash
+	 * Special IMA measurement hash
 	 */
 	chunk_t measurement;
 
@@ -125,10 +128,12 @@ METHOD(pts_ima_event_list_t, destroy, void,
 /**
  * See header
  */
-pts_ima_event_list_t* pts_ima_event_list_create(char *file)
+pts_ima_event_list_t* pts_ima_event_list_create(char *file,
+												pts_meas_algorithms_t pcr_algo)
 {
 	private_pts_ima_event_list_t *this;
 	event_entry_t *entry;
+	chunk_t digest;
 	uint32_t pcr, type_len, name_len, eventdata_len, algo_digest_len, algo_len;
 	char type[IMA_TYPE_LEN_MAX];
 	char algo_digest[IMA_ALGO_DIGEST_LEN_MAX];
@@ -175,12 +180,13 @@ pts_ima_event_list_t* pts_ima_event_list_create(char *file)
 			DBG2(DBG_PTS, "loaded ima measurements '%s' (%d entries)",
 				 file, this->list->get_count(this->list));
 			close(fd);
+
 			return &this->public;
 		}
 
 		/* create and initialize new IMA entry */
 		entry = malloc_thing(event_entry_t);
-		entry->measurement = chunk_alloc(HASH_SIZE_SHA1);
+		entry->measurement = chunk_alloc(pts_meas_algo_hash_size(pcr_algo));
 		entry->algo = NULL;
 		entry->name = NULL;
 
@@ -190,7 +196,7 @@ pts_ima_event_list_t* pts_ima_event_list_create(char *file)
 			break;
 		}
 
-		/* read 20 byte SHA-1 measurement digest */
+		/* read 20 byte SHA-1 IMA measurement digest */
 		if (read(fd, entry->measurement.ptr, HASH_SIZE_SHA1) != HASH_SIZE_SHA1)
 		{
 			error = "invalid SHA-1 digest field";
@@ -271,6 +277,9 @@ pts_ima_event_list_t* pts_ima_event_list_create(char *file)
 			entry->algo = malloc(algo_len);
 			memcpy(entry->algo, algo_digest, algo_len);
 
+			/* extract the digest */
+			digest = chunk_create(pos + 1, algo_digest_len - algo_len);
+
 			/* read the 32 bit length of the event name in host order */
 			if (read(fd, &name_len, 4) != 4 ||
 				eventdata_len != 4 + algo_digest_len + 4 + name_len)
@@ -288,6 +297,18 @@ pts_ima_event_list_t* pts_ima_event_list_create(char *file)
 				error = "invalid filename field";
 				break;
 			}
+
+			/* re-compute IMA measurement digest for non-SHA1 hash algorithms */
+			if (pcr_algo != PTS_MEAS_ALGO_SHA1)
+			{
+				if (!pts_ima_event_hash(digest, entry->algo, entry->name,
+										pcr_algo, entry->measurement.ptr))
+				{
+					break;
+				}
+
+			}
+
 		}
 		else
 		{
@@ -327,4 +348,64 @@ pts_ima_event_list_t* pts_ima_event_list_create(char *file)
 	destroy(this);
 
 	return NULL;
+}
+
+/**
+ * See header
+ */
+bool pts_ima_event_hash(chunk_t digest, char *ima_algo, char *ima_name,
+						pts_meas_algorithms_t pcr_algo, char *hash_buf)
+{
+	hash_algorithm_t hash_alg;
+	hasher_t *hasher;
+	bool success;
+
+	hash_alg = pts_meas_algo_to_hash(pcr_algo);
+	hasher = lib->crypto->create_hasher(lib->crypto, hash_alg);
+	if (!hasher)
+	{
+		DBG1(DBG_PTS, "%N hasher could not be created",
+			 hash_algorithm_short_names, hash_alg);
+		return FALSE;
+	}
+
+	if (ima_algo)
+	{
+		uint32_t d_len, n_len;
+		chunk_t algo_name, event_name, digest_len, name_len;
+
+		/* IMA-NG hash */
+		algo_name  = chunk_create(ima_algo, strlen(ima_algo) + 1);
+		event_name = chunk_create(ima_name, strlen(ima_name) + 1);
+
+		d_len = algo_name.len + digest.len;
+		digest_len = chunk_create((uint8_t*)&d_len, sizeof(d_len));
+		/* TODO handle endianness of both client and server platforms */
+
+		n_len = event_name.len;
+		name_len = chunk_create((uint8_t*)&n_len, sizeof(n_len));
+		/* TODO handle endianness of both client and server platforms */
+
+		success = hasher->get_hash(hasher, digest_len, NULL) &&
+				  hasher->get_hash(hasher, algo_name, NULL) &&
+				  hasher->get_hash(hasher, digest, NULL) &&
+				  hasher->get_hash(hasher, name_len, NULL) &&
+				  hasher->get_hash(hasher, event_name, hash_buf);
+	}
+	else
+	{
+		u_char filename_buffer[IMA_FILENAME_LEN_MAX + 1];
+		chunk_t file_name;
+
+		/* IMA legacy hash */
+		memset(filename_buffer, 0, sizeof(filename_buffer));
+		strncpy(filename_buffer, ima_name, IMA_FILENAME_LEN_MAX);
+		file_name = chunk_create (filename_buffer, sizeof(filename_buffer));
+
+		success = hasher->get_hash(hasher, digest, NULL) &&
+				  hasher->get_hash(hasher, file_name, hash_buf);
+	}
+	hasher->destroy(hasher);
+
+	return success;
 }
