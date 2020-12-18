@@ -328,9 +328,9 @@ static void apply_port(host_t *host, host_t *old, uint16_t port, bool local)
 	{
 		port = old->get_port(old);
 	}
-	else if (local && port == charon->socket->get_port(charon->socket, FALSE))
+	else if (local && port == charon->socket->get_port(charon->socket, SOCKET_FAMILY_BOTH, FALSE))
 	{
-		port = charon->socket->get_port(charon->socket, TRUE);
+		port = charon->socket->get_port(charon->socket, SOCKET_FAMILY_BOTH, TRUE);
 	}
 	else if (!local && port == IKEV2_UDP_PORT)
 	{

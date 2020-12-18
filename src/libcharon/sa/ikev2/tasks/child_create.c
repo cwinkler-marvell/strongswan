@@ -909,8 +909,11 @@ static bool build_payloads(private_child_create_t *this, message_t *message)
 		default:
 			break;
 	}
+	
+	host_t *my_host = this->ike_sa->get_my_host (this->ike_sa);
+	int family = my_host->get_family (my_host);
 
-	features = charon->kernel->get_features(charon->kernel);
+	features = charon->kernel->get_features(charon->kernel, family);
 	if (!(features & KERNEL_ESP_V3_TFC))
 	{
 		message->add_notify(message, FALSE, ESP_TFC_PADDING_NOT_SUPPORTED,
