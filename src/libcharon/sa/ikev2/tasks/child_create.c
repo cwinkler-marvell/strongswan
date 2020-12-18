@@ -3,6 +3,7 @@
  * Copyright (C) 2005-2008 Martin Willi
  * Copyright (C) 2005 Jan Hutter
  * HSR Hochschule fuer Technik Rapperswil
+ * Copyright (C) 2019-2020 Marvell
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -1330,7 +1331,7 @@ static linked_list_t* get_ts_if_nat_transport(private_child_create_t *this,
 static child_cfg_t* select_child_cfg(private_child_create_t *this)
 {
 	peer_cfg_t *peer_cfg;
-	child_cfg_t *child_cfg = NULL;;
+	child_cfg_t *child_cfg = NULL;
 
 	peer_cfg = this->ike_sa->get_peer_cfg(this->ike_sa);
 	if (peer_cfg && this->tsi && this->tsr)
