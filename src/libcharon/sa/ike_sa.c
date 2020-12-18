@@ -4,6 +4,7 @@
  * Copyright (C) 2005-2009 Martin Willi
  * Copyright (C) 2005 Jan Hutter
  * HSR Hochschule fuer Technik Rapperswil
+ * Copyright (C) 2019-2020 Marvell
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -1414,6 +1415,7 @@ static void resolve_hosts(private_ike_sa_t *this)
 	switch (charon->socket->supported_families(charon->socket))
 	{
 		case SOCKET_FAMILY_IPV4:
+		case SOCKET_FAMILY_FC:
 			family = AF_INET;
 			break;
 		case SOCKET_FAMILY_IPV6:
@@ -2631,6 +2633,7 @@ static bool is_any_path_valid(private_ike_sa_t *this)
 	switch (charon->socket->supported_families(charon->socket))
 	{
 		case SOCKET_FAMILY_IPV4:
+		case SOCKET_FAMILY_FC:
 			family = AF_INET;
 			break;
 		case SOCKET_FAMILY_IPV6:
